@@ -7,12 +7,14 @@ import (
 	"strconv"
 	"strings"
 
-	"gscale_erp_read/internal/store"
+	"github.com/WIKKIwk/erp_scz_db_reader/internal/store"
 )
 
 type searcher interface {
 	SearchItems(ctx context.Context, query string, limit int) ([]store.Item, error)
 	SearchItemWarehouses(ctx context.Context, itemCode, query string, limit int) ([]store.WarehouseStock, error)
+	GetItem(ctx context.Context, itemCode string) (store.ItemDetail, error)
+	GetWarehouse(ctx context.Context, warehouse string) (store.Warehouse, error)
 }
 
 func NewHandler(s searcher) http.Handler {
@@ -27,6 +29,23 @@ func NewHandler(s searcher) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"data": items})
+	})
+	mux.HandleFunc("GET /v1/items/{item_code}", func(w http.ResponseWriter, r *http.Request) {
+		itemCode := strings.TrimSpace(r.PathValue("item_code"))
+		if itemCode == "" {
+			writeError(w, http.StatusBadRequest, "item_code is required")
+			return
+		}
+		item, err := s.GetItem(r.Context(), itemCode)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if strings.Contains(strings.ToLower(err.Error()), "item topilmadi") {
+				status = http.StatusNotFound
+			}
+			writeError(w, status, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": item})
 	})
 	mux.HandleFunc("GET /v1/items/{item_code}/warehouses", func(w http.ResponseWriter, r *http.Request) {
 		itemCode := strings.TrimSpace(r.PathValue("item_code"))
@@ -44,6 +63,23 @@ func NewHandler(s searcher) http.Handler {
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{"data": stocks})
+	})
+	mux.HandleFunc("GET /v1/warehouses/{warehouse}", func(w http.ResponseWriter, r *http.Request) {
+		warehouse := strings.TrimSpace(r.PathValue("warehouse"))
+		if warehouse == "" {
+			writeError(w, http.StatusBadRequest, "warehouse is required")
+			return
+		}
+		out, err := s.GetWarehouse(r.Context(), warehouse)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if strings.Contains(strings.ToLower(err.Error()), "warehouse topilmadi") {
+				status = http.StatusNotFound
+			}
+			writeError(w, status, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"data": out})
 	})
 	return mux
 }

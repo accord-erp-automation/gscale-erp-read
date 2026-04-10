@@ -6,7 +6,16 @@ Standalone read-only ERP service for item search and warehouse shortlist.
 
 - `GET /healthz`
 - `GET /v1/items?query=...&limit=...`
+- `GET /v1/items/{item_code}`
 - `GET /v1/items/{item_code}/warehouses?query=...&limit=...`
+- `GET /v1/warehouses/{warehouse}`
+
+The service is shaped around what the bot currently reads from ERPNext:
+
+- item search for inline item selection
+- warehouse shortlist for the chosen item
+- item `stock_uom` for stock-entry draft creation
+- warehouse `company` for stock-entry draft creation
 
 ## Run
 

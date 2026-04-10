@@ -1,4 +1,4 @@
-module gscale_erp_read
+module github.com/WIKKIwk/erp_scz_db_reader
 
 go 1.26
 

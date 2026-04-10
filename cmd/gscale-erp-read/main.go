@@ -11,9 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	"gscale_erp_read/internal/appconfig"
-	"gscale_erp_read/internal/httpapi"
-	"gscale_erp_read/internal/store"
+	"github.com/WIKKIwk/erp_scz_db_reader/internal/appconfig"
+	"github.com/WIKKIwk/erp_scz_db_reader/internal/httpapi"
+	"github.com/WIKKIwk/erp_scz_db_reader/internal/store"
 
 	_ "github.com/go-sql-driver/mysql"
 )
