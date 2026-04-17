@@ -63,7 +63,7 @@ func TestRankItemsMatchesHotLanchAliases(t *testing.T) {
 		{ItemCode: "Asl Sifat Hot Dog", ItemName: "Asl Sifat Hot Dog"},
 	}
 
-	for _, query := range []string{"hot lanch", "hotlanch", "hotlunch"} {
+	for _, query := range []string{"hot lanch", "hotlanch", "hotlunch", "xot lunch", "hot launch", "xotlanch"} {
 		got := rankItems(items, searchTerms(query))
 		if len(got) < 2 {
 			t.Fatalf("query %q expected at least 2 items, got %d", query, len(got))

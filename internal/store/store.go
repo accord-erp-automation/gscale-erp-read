@@ -339,23 +339,101 @@ func searchTerms(query string) []string {
 }
 
 func searchAliasVariants(value string) []string {
+	value = normalizedSearchText(value)
+	if value == "" {
+		return nil
+	}
+
+	tokens := strings.Fields(value)
+	if len(tokens) == 0 {
+		return nil
+	}
+
+	phrases := []string{""}
+	for _, token := range tokens {
+		variants := tokenAliasVariants(token)
+		next := make([]string, 0, len(phrases)*len(variants))
+		for _, phrase := range phrases {
+			for _, variant := range variants {
+				combined := strings.TrimSpace(strings.Join([]string{phrase, variant}, " "))
+				if combined == "" {
+					continue
+				}
+				next = appendUniqueSearchValue(next, combined)
+				if len(next) >= 16 {
+					break
+				}
+			}
+			if len(next) >= 16 {
+				break
+			}
+		}
+		phrases = next
+		if len(phrases) == 0 {
+			break
+		}
+	}
+
+	out := make([]string, 0, len(phrases)*2)
+	for _, phrase := range phrases {
+		out = appendUniqueSearchValue(out, phrase)
+		out = appendUniqueSearchValue(out, compactField(phrase))
+	}
+	return out
+}
+
+func tokenAliasVariants(token string) []string {
+	token = normalizedSearchText(token)
+	if token == "" {
+		return nil
+	}
+
+	out := []string{token}
+	add := func(value string) {
+		value = normalizedSearchText(value)
+		if value == "" {
+			return
+		}
+		out = appendUniqueSearchValue(out, value)
+	}
+
+	if strings.HasPrefix(token, "x") && len(token) > 1 {
+		add("h" + token[1:])
+	}
+	if strings.HasPrefix(token, "h") && len(token) > 1 {
+		add("x" + token[1:])
+	}
+
 	type aliasRule struct {
 		from string
 		to   string
 	}
 	rules := []aliasRule{
-		{from: "xot", to: "hot"},
-		{from: "hot", to: "xot"},
 		{from: "lanch", to: "lunch"},
 		{from: "lunch", to: "lanch"},
+		{from: "launch", to: "lanch"},
+		{from: "launch", to: "lunch"},
 	}
-	out := make([]string, 0, len(rules))
 	for _, rule := range rules {
-		if strings.Contains(value, rule.from) {
-			out = append(out, strings.ReplaceAll(value, rule.from, rule.to))
+		if strings.Contains(token, rule.from) {
+			add(strings.ReplaceAll(token, rule.from, rule.to))
 		}
 	}
+
 	return out
+}
+
+func appendUniqueSearchValue(values []string, value string) []string {
+	value = normalizedSearchText(value)
+	if value == "" {
+		return values
+	}
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func normalizedSearchText(value string) string {
