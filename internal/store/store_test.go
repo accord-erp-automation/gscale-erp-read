@@ -38,3 +38,38 @@ func TestRankItemsAvoidsNoisyShortMatches(t *testing.T) {
 		}
 	}
 }
+
+func TestSearchTermsExpandHotLanchVariants(t *testing.T) {
+	terms := searchTerms("hotlunch")
+	want := []string{"hotlunch", "hotlanch", "xotlunch", "xotlanch"}
+	for _, expected := range want {
+		found := false
+		for _, term := range terms {
+			if term == expected {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected variant %q in %#v", expected, terms)
+		}
+	}
+}
+
+func TestRankItemsMatchesHotLanchAliases(t *testing.T) {
+	items := []Item{
+		{ItemCode: "xot lanch sochnaya kuritsa 90gr", ItemName: "xot lanch sochnaya kuritsa 90gr"},
+		{ItemCode: "xot lanch sochnaya kuritsa ostriy 90gr", ItemName: "xot lanch sochnaya kuritsa ostriy 90gr"},
+		{ItemCode: "Asl Sifat Hot Dog", ItemName: "Asl Sifat Hot Dog"},
+	}
+
+	for _, query := range []string{"hot lanch", "hotlanch", "hotlunch"} {
+		got := rankItems(items, searchTerms(query))
+		if len(got) < 2 {
+			t.Fatalf("query %q expected at least 2 items, got %d", query, len(got))
+		}
+		if got[0].ItemCode != "xot lanch sochnaya kuritsa 90gr" {
+			t.Fatalf("query %q first item = %q", query, got[0].ItemCode)
+		}
+	}
+}

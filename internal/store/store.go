@@ -296,7 +296,7 @@ func searchTerms(query string) []string {
 		return nil
 	}
 	seen := map[string]struct{}{}
-	out := make([]string, 0, 4)
+	out := make([]string, 0, 12)
 	add := func(value string) {
 		value = normalizedSearchText(value)
 		if value == "" {
@@ -308,8 +308,53 @@ func searchTerms(query string) []string {
 		seen[value] = struct{}{}
 		out = append(out, value)
 	}
-	add(query)
-	add(transliterateUzbek(query))
+	addWithVariants := func(value string) {
+		value = normalizedSearchText(value)
+		if value == "" {
+			return
+		}
+		queue := []string{value}
+		for len(queue) > 0 {
+			current := queue[0]
+			queue = queue[1:]
+			if _, ok := seen[current]; ok {
+				continue
+			}
+			add(current)
+			for _, variant := range searchAliasVariants(current) {
+				variant = normalizedSearchText(variant)
+				if variant == "" {
+					continue
+				}
+				if _, ok := seen[variant]; ok {
+					continue
+				}
+				queue = append(queue, variant)
+			}
+		}
+	}
+	addWithVariants(query)
+	addWithVariants(transliterateUzbek(query))
+	return out
+}
+
+func searchAliasVariants(value string) []string {
+	type aliasRule struct {
+		from string
+		to   string
+	}
+	rules := []aliasRule{
+		{from: "xot", to: "hot"},
+		{from: "hot", to: "xot"},
+		{from: "lanch", to: "lunch"},
+		{from: "lunch", to: "lanch"},
+	}
+	out := make([]string, 0, len(rules))
+	for _, rule := range rules {
+		if strings.Contains(value, rule.from) {
+			out = append(out, strings.ReplaceAll(value, rule.from, rule.to))
+		}
+	}
 	return out
 }
 
