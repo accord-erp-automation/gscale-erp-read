@@ -58,17 +58,58 @@ WHERE EXISTS (
 		AND COALESCE(NULLIF(item_default.default_warehouse, ''), '') <> ''
 )
 `
-	args := make([]any, 0, 4)
+	args := make([]any, 0, 16)
+	if len(terms) > 0 {
+		sqlText += `
+AND (
+`
+		filterAdded := false
+		for _, term := range terms {
+			term = normalizedSearchText(term)
+			if term == "" {
+				continue
+			}
+			compact := compactField(term)
+			if compact == "" {
+				continue
+			}
+			if filterAdded {
+				sqlText += `
+	OR
+`
+			}
+			sqlText += `(
+		LOWER(COALESCE(NULLIF(tabItem.item_code, ''), tabItem.name)) LIKE ?
+		OR LOWER(COALESCE(NULLIF(tabItem.item_name, ''), COALESCE(NULLIF(tabItem.item_code, ''), tabItem.name))) LIKE ?
+		OR LOWER(tabItem.name) LIKE ?
+		OR REPLACE(REPLACE(REPLACE(LOWER(COALESCE(NULLIF(tabItem.item_code, ''), tabItem.name)), ' ', ''), '-', ''), '_', '') LIKE ?
+		OR REPLACE(REPLACE(REPLACE(LOWER(COALESCE(NULLIF(tabItem.item_name, ''), COALESCE(NULLIF(tabItem.item_code, ''), tabItem.name))), ' ', ''), '-', ''), '_', '') LIKE ?
+		OR REPLACE(REPLACE(REPLACE(LOWER(tabItem.name), ' ', ''), '-', ''), '_', '') LIKE ?
+	)`
+			args = append(args,
+				"%"+term+"%",
+				"%"+term+"%",
+				"%"+term+"%",
+				"%"+compact+"%",
+				"%"+compact+"%",
+				"%"+compact+"%",
+			)
+			filterAdded = true
+		}
+		sqlText += `
+)
+`
+	}
 	sqlText += `
 ORDER BY modified DESC
 LIMIT ?
 `
 	queryLimit := limit
-	if len(terms) > 0 && queryLimit < 2000 {
-		queryLimit = 2000
+	if len(terms) > 0 && queryLimit < 200 {
+		queryLimit = 200
 	}
-	if queryLimit > 5000 {
-		queryLimit = 5000
+	if queryLimit > 1000 {
+		queryLimit = 1000
 	}
 	args = append(args, queryLimit)
 
@@ -400,6 +441,7 @@ func fuzzyFieldScore(field, term string) int {
 	}
 	fieldCompact := compactField(field)
 	termCompact := compactField(term)
+	shortTerm := len([]rune(termCompact)) <= 3
 	switch {
 	case field == term:
 		return 120
@@ -411,21 +453,21 @@ func fuzzyFieldScore(field, term string) int {
 		return 98
 	case strings.Contains(field, " "+term):
 		return 90
-	case strings.Contains(field, term):
+	case !shortTerm && strings.Contains(field, term):
 		return 75
-	case strings.Contains(fieldCompact, termCompact):
+	case !shortTerm && strings.Contains(fieldCompact, termCompact):
 		return 72
-	case tokenTypoScore(field, term) > 0:
+	case !shortTerm && tokenTypoScore(field, term) > 0:
 		return tokenTypoScore(field, term)
-	case subsequenceMatch(fieldCompact, termCompact):
+	case !shortTerm && subsequenceMatch(fieldCompact, termCompact):
 		return 55
-	case levenshteinDistance(field, term) <= 1:
+	case !shortTerm && levenshteinDistance(field, term) <= 1:
 		return 45
-	case levenshteinDistance(fieldCompact, termCompact) <= 1:
+	case !shortTerm && levenshteinDistance(fieldCompact, termCompact) <= 1:
 		return 44
-	case levenshteinDistance(firstToken(field), term) <= 1:
+	case !shortTerm && levenshteinDistance(firstToken(field), term) <= 1:
 		return 40
-	case levenshteinDistance(firstToken(fieldCompact), termCompact) <= 1:
+	case !shortTerm && levenshteinDistance(firstToken(fieldCompact), termCompact) <= 1:
 		return 39
 	default:
 		return 0
