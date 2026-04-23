@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/WIKKIwk/erp_scz_db_reader/internal/store"
@@ -15,9 +16,13 @@ type fakeSearcher struct {
 	stocks []store.WarehouseStock
 	item   store.ItemDetail
 	wh     store.Warehouse
+	search func(context.Context, string, int, string) ([]store.Item, error)
 }
 
-func (f fakeSearcher) SearchItems(ctx context.Context, query string, limit int) ([]store.Item, error) {
+func (f fakeSearcher) SearchItems(ctx context.Context, query string, limit int, warehouse string) ([]store.Item, error) {
+	if f.search != nil {
+		return f.search(ctx, query, limit, warehouse)
+	}
 	return f.items, nil
 }
 
@@ -35,10 +40,25 @@ func (f fakeSearcher) GetWarehouse(ctx context.Context, warehouse string) (store
 
 func TestItemsEndpoint(t *testing.T) {
 	h := NewHandler(fakeSearcher{
-		items: []store.Item{{ItemCode: "ITM-001", ItemName: "Item 1", Name: "ITM-001"}},
+		search: func(_ context.Context, query string, limit int, warehouse string) ([]store.Item, error) {
+			if query != "itm" {
+				t.Fatalf("query = %q", query)
+			}
+			if limit != 10 {
+				t.Fatalf("limit = %d", limit)
+			}
+			if warehouse != "Stores - A" {
+				t.Fatalf("warehouse = %q", warehouse)
+			}
+			return []store.Item{{ItemCode: "ITM-001", ItemName: "Item 1", Name: "ITM-001"}}, nil
+		},
 	})
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/items?query=itm&limit=10", nil)
+	req := httptest.NewRequest(
+		http.MethodGet,
+		"/v1/items?query=itm&limit=10&warehouse="+url.QueryEscape("Stores - A"),
+		nil,
+	)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 

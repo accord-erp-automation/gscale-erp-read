@@ -11,7 +11,7 @@ import (
 )
 
 type searcher interface {
-	SearchItems(ctx context.Context, query string, limit int) ([]store.Item, error)
+	SearchItems(ctx context.Context, query string, limit int, warehouse string) ([]store.Item, error)
 	SearchItemWarehouses(ctx context.Context, itemCode, query string, limit int) ([]store.WarehouseStock, error)
 	GetItem(ctx context.Context, itemCode string) (store.ItemDetail, error)
 	GetWarehouse(ctx context.Context, warehouse string) (store.Warehouse, error)
@@ -29,7 +29,7 @@ func NewHandler(s searcher) http.Handler {
 		})
 	})
 	mux.HandleFunc("GET /v1/items", func(w http.ResponseWriter, r *http.Request) {
-		items, err := s.SearchItems(r.Context(), r.URL.Query().Get("query"), parseLimit(r))
+		items, err := s.SearchItems(r.Context(), r.URL.Query().Get("query"), parseLimit(r), r.URL.Query().Get("warehouse"))
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -93,17 +93,14 @@ func NewHandler(s searcher) http.Handler {
 func parseLimit(r *http.Request) int {
 	raw := strings.TrimSpace(r.URL.Query().Get("limit"))
 	if raw == "" {
-		return 20
+		return 0
 	}
 	limit, err := strconv.Atoi(raw)
 	if err != nil {
-		return 20
+		return 0
 	}
 	if limit <= 0 {
-		return 20
-	}
-	if limit > 50 {
-		return 50
+		return 0
 	}
 	return limit
 }

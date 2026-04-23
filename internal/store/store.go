@@ -40,10 +40,11 @@ func New(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
-func (s *Store) SearchItems(ctx context.Context, query string, limit int) ([]Item, error) {
-	limit = normalizeLimit(limit)
+func (s *Store) SearchItems(ctx context.Context, query string, limit int, warehouse string) ([]Item, error) {
 	query = strings.TrimSpace(query)
+	warehouse = strings.TrimSpace(warehouse)
 	terms := searchTerms(query)
+	args := make([]any, 0, 16)
 
 	sqlText := `
 SELECT
@@ -51,18 +52,31 @@ SELECT
 	COALESCE(NULLIF(item_code, ''), name) AS item_code,
 	COALESCE(NULLIF(item_name, ''), NULLIF(item_code, ''), name) AS item_name
 FROM tabItem
+`
+	whereAdded := false
+	if warehouse != "" {
+		sqlText += `
 WHERE EXISTS (
 	SELECT 1
 	FROM ` + "`tabItem Default`" + ` item_default
 	WHERE item_default.parent = tabItem.name
-		AND COALESCE(NULLIF(item_default.default_warehouse, ''), '') <> ''
+		AND item_default.default_warehouse = ?
 )
 `
-	args := make([]any, 0, 16)
+		args = append(args, warehouse)
+		whereAdded = true
+	}
 	if len(terms) > 0 {
-		sqlText += `
+		if whereAdded {
+			sqlText += `
 AND (
 `
+		} else {
+			sqlText += `
+WHERE (
+`
+			whereAdded = true
+		}
 		filterAdded := false
 		for _, term := range terms {
 			term = normalizedSearchText(term)
@@ -102,16 +116,12 @@ AND (
 	}
 	sqlText += `
 ORDER BY modified DESC
-LIMIT ?
 `
-	queryLimit := limit
-	if len(terms) > 0 && queryLimit < 200 {
-		queryLimit = 200
+	if limit > 0 {
+		sqlText += `LIMIT ?
+`
+		args = append(args, limit)
 	}
-	if queryLimit > 1000 {
-		queryLimit = 1000
-	}
-	args = append(args, queryLimit)
 
 	rows, err := s.db.QueryContext(ctx, sqlText, args...)
 	if err != nil {
@@ -119,7 +129,7 @@ LIMIT ?
 	}
 	defer rows.Close()
 
-	items := make([]Item, 0, limit)
+	items := make([]Item, 0, 128)
 	for rows.Next() {
 		var item Item
 		if err := rows.Scan(&item.Name, &item.ItemCode, &item.ItemName); err != nil {
@@ -141,7 +151,7 @@ LIMIT ?
 	}
 	if len(terms) > 0 {
 		items = rankItems(items, terms)
-		if len(items) > limit {
+		if limit > 0 && len(items) > limit {
 			items = items[:limit]
 		}
 	}
